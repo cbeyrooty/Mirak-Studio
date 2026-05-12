@@ -214,19 +214,11 @@ body {
 
 .mirak-logo-breathe {
   position: relative;
-  /* Scale fluidly with the smaller viewport dimension; cap at 720px.
-     Also constrain by height to avoid overflow on short/wide viewports. */
-  width: clamp(220px, 56vmin, 720px);
-  max-height: 70vh;
+  /* Scale with viewport width (primary) and vmin (fallback for tall screens),
+     but never let the logo eat the room reserved for the subheader/footer. */
+  width: clamp(240px, min(max(40vw, 56vmin), 72vh), 820px);
   aspect-ratio: 1 / 1;
   animation: mirakBreathe 6.4s ease-in-out infinite;
-}
-
-/* When the container is height-constrained, keep aspect-ratio by also limiting width */
-@supports (aspect-ratio: 1) {
-  .mirak-logo-breathe {
-    /* aspect-ratio handles it */
-  }
 }
 
 @keyframes mirakBreathe {
@@ -570,10 +562,10 @@ body {
   }
 }
 
-/* Ultra-wide screens — bump logo modestly; vmin already keeps it reasonable */
+/* Ultra-wide screens — keep growing with width but still respect height room */
 @media (min-width: 1600px) and (min-aspect-ratio: 2/1) {
   .mirak-logo-breathe {
-    width: clamp(380px, 44vmin, 820px);
+    width: clamp(420px, min(46vw, 76vh), 980px);
   }
 }
 

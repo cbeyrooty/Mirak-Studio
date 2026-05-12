@@ -8,11 +8,26 @@ const FADE_IN = 1200;     // when main becomes fully visible
 
 export default function MirakSplash() {
   const [phase, setPhase] = useState("black"); // 'black' | 'main'
+  const [isTouch, setIsTouch] = useState(false);
   const cursorRef = useRef({ x: -1000, y: -1000 });
   const targetRef = useRef({ x: -1000, y: -1000 });
   const spotlightRef = useRef(null);
   const glowRef = useRef(null);
   const rafRef = useRef(null);
+
+  // Detect touch / no-hover devices — used to disable the hum entirely on mobile
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(hover: none) and (pointer: coarse)");
+    const apply = () => setIsTouch(mq.matches);
+    apply();
+    if (mq.addEventListener) mq.addEventListener("change", apply);
+    else mq.addListener(apply);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener("change", apply);
+      else mq.removeListener(apply);
+    };
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setPhase("main"), BLACK_HOLD);
@@ -137,7 +152,7 @@ export default function MirakSplash() {
         <div className="mirak-letterbox mirak-letterbox-top" aria-hidden="true" />
         <div className="mirak-letterbox mirak-letterbox-bottom" aria-hidden="true" />
 
-        <HumToggle active={phase === "main"} autoStart />
+        <HumToggle active={phase === "main" && !isTouch} autoStart enabled={!isTouch} />
 
         <div className="mirak-footer-mark" data-testid="mirak-footer-mark">
           <span className="mirak-footer-dot" />

@@ -8,8 +8,8 @@ import { Volume2, VolumeX } from "lucide-react";
  * on the first interaction. Once the user toggles off, we stop and
  * do NOT auto-resume.
  */
-export default function HumToggle({ active, autoStart = false }) {
-  const [on, setOn] = useState(autoStart);
+export default function HumToggle({ active, autoStart = false, enabled = true }) {
+  const [on, setOn] = useState(autoStart && enabled);
   const ctxRef = useRef(null);
   const nodesRef = useRef(null);
   const userMutedRef = useRef(false);
@@ -175,6 +175,8 @@ export default function HumToggle({ active, autoStart = false }) {
       }
     }
   };
+
+  if (!enabled) return null;
 
   return (
     <button
