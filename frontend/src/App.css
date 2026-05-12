@@ -208,15 +208,15 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 28px;
+  gap: clamp(2px, 1vw, 28px);
   pointer-events: none;
 }
 
 .mirak-logo-breathe {
   position: relative;
-  /* Scale with viewport width (primary) and vmin (fallback for tall screens),
-     but never let the logo eat the room reserved for the subheader/footer. */
-  width: clamp(240px, min(max(40vw, 56vmin), 72vh), 820px);
+  /* Primary: 50vw (grows with browser width). Fallback: 56vmin for tall screens.
+     Cap: 78vh so we never crowd the subheader/footer. Hard ceiling at 980px. */
+  width: clamp(240px, min(max(50vw, 56vmin), 78vh), 980px);
   aspect-ratio: 1 / 1;
   animation: mirakBreathe 6.4s ease-in-out infinite;
 }
@@ -341,7 +341,9 @@ body {
 
 @media (max-width: 640px) {
   .mirak-subheader {
-    margin-top: clamp(-20px, -2vw, -8px);
+    /* Pull tightly under the logo letterforms — the PNG container has ~25%
+       empty space below the letters, so a large negative margin is needed. */
+    margin-top: clamp(-110px, -18vw, -50px);
     gap: 8px;
     font-size: clamp(11px, 3.4vw, 14px);
   }
@@ -565,7 +567,7 @@ body {
 /* Ultra-wide screens — keep growing with width but still respect height room */
 @media (min-width: 1600px) and (min-aspect-ratio: 2/1) {
   .mirak-logo-breathe {
-    width: clamp(420px, min(46vw, 76vh), 980px);
+    width: clamp(460px, min(54vw, 82vh), 1180px);
   }
 }
 
