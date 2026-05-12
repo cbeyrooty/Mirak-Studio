@@ -1,37 +1,19 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import TopoCanvas from "@/components/TopoCanvas";
-import HumToggle from "@/components/HumToggle";
 import mirakLogo from "@/assets/mirak-logo.png";
 
-const BLACK_HOLD = 450;   // brief black before main fades in
-const FADE_IN = 1200;     // when main becomes fully visible
+const BLACK_HOLD = 450;
 
 export default function MirakSplash() {
   const [phase, setPhase] = useState("black"); // 'black' | 'main'
-  const [isTouch, setIsTouch] = useState(false);
   const cursorRef = useRef({ x: -1000, y: -1000 });
   const targetRef = useRef({ x: -1000, y: -1000 });
   const spotlightRef = useRef(null);
   const glowRef = useRef(null);
   const rafRef = useRef(null);
 
-  // Detect touch / no-hover devices — used to disable the hum entirely on mobile
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(hover: none) and (pointer: coarse)");
-    const apply = () => setIsTouch(mq.matches);
-    apply();
-    if (mq.addEventListener) mq.addEventListener("change", apply);
-    else mq.addListener(apply);
-    return () => {
-      if (mq.removeEventListener) mq.removeEventListener("change", apply);
-      else mq.removeListener(apply);
-    };
-  }, []);
-
   useEffect(() => {
     const t = setTimeout(() => setPhase("main"), BLACK_HOLD);
-    // Strip the platform-injected badge for the splash placeholder
     const removeBadge = () => {
       const el = document.getElementById("emergent-badge");
       if (el) el.remove();
@@ -79,7 +61,6 @@ export default function MirakSplash() {
     };
     rafRef.current = requestAnimationFrame(tick);
 
-    // Keep spotlight inside the viewport when the window is resized/rotated
     const onResize = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
@@ -152,8 +133,6 @@ export default function MirakSplash() {
         <div className="mirak-letterbox mirak-letterbox-top" aria-hidden="true" />
         <div className="mirak-letterbox mirak-letterbox-bottom" aria-hidden="true" />
 
-        <HumToggle active={phase === "main" && !isTouch} autoStart enabled={!isTouch} />
-
         <div className="mirak-footer-mark" data-testid="mirak-footer-mark">
           <span className="mirak-footer-dot" />
           <span>EST 2026</span>
@@ -162,7 +141,6 @@ export default function MirakSplash() {
         </div>
       </div>
 
-      {/* Solid black overlay that fades away — replaces the boot phase */}
       <div
         className={`mirak-black-overlay ${phase === "main" ? "is-gone" : ""}`}
         aria-hidden="true"
