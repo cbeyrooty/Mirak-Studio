@@ -101,7 +101,7 @@ export default function MirakSplash() {
           <div className="mirak-subheader" data-testid="mirak-subheader">
             <span className="mirak-subheader-rule" aria-hidden="true" />
             <span className="mirak-subheader-text">
-              The largest virtual film production stage in the Balkans
+              The largest virtual production stage in the Balkans
             </span>
             <span className="mirak-subheader-rule" aria-hidden="true" />
           </div>

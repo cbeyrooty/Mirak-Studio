@@ -2,15 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { Volume2, VolumeX } from "lucide-react";
 
 /**
- * Cinematic hum — auto-starts (with a graceful fallback if the browser
- * blocks autoplay until the first user gesture). User can mute at any time.
+ * Cinematic hum — ON by default. User can mute. Browsers that block
+ * autoplay will silently wait for the first user gesture to actually
+ * start the audio, but the UI shows ON from the start (per intent).
  */
 export default function HumToggle({ active, autoStart = false }) {
-  const [on, setOn] = useState(false);
-  const [pendingGesture, setPendingGesture] = useState(false);
+  // ON by default — represents the user's intent regardless of audio-context state
+  const [on, setOn] = useState(autoStart);
   const ctxRef = useRef(null);
   const nodesRef = useRef(null);
   const startedRef = useRef(false);
+  const userMutedRef = useRef(false);
 
   const startAudio = async () => {
     if (startedRef.current) return true;
@@ -19,14 +21,9 @@ export default function HumToggle({ active, autoStart = false }) {
     const ctx = new AC();
 
     if (ctx.state === "suspended") {
-      try {
-        await ctx.resume();
-      } catch {
-        // resume failed — likely needs user gesture
-      }
+      try { await ctx.resume(); } catch {}
     }
     if (ctx.state !== "running") {
-      // Browser blocked autoplay
       try { ctx.close(); } catch {}
       return false;
     }
@@ -104,38 +101,39 @@ export default function HumToggle({ active, autoStart = false }) {
     }, 500);
   };
 
-  // Auto-start when active. If blocked, wait for the first user gesture.
+  // When active, try to start audio. If autoplay blocked, attach gesture listeners
+  // that will start audio on the first interaction — unless the user has muted.
   useEffect(() => {
-    if (!autoStart || !active || startedRef.current) return;
+    if (!autoStart || !active) return;
     let cancelled = false;
 
     (async () => {
-      const ok = await startAudio();
-      if (cancelled) return;
-      if (ok) setOn(true);
-      else setPendingGesture(true);
+      if (userMutedRef.current) return;
+      await startAudio();
     })();
 
     const onGesture = async () => {
-      if (cancelled || startedRef.current) return;
-      const ok = await startAudio();
-      if (ok) {
-        setOn(true);
-        setPendingGesture(false);
+      if (cancelled || startedRef.current || userMutedRef.current) return;
+      await startAudio();
+      // Listeners self-clean once audio is running
+      if (startedRef.current) {
         window.removeEventListener("pointerdown", onGesture);
         window.removeEventListener("keydown", onGesture);
         window.removeEventListener("mousemove", onGesture);
+        window.removeEventListener("touchstart", onGesture);
       }
     };
     window.addEventListener("pointerdown", onGesture);
     window.addEventListener("keydown", onGesture);
     window.addEventListener("mousemove", onGesture);
+    window.addEventListener("touchstart", onGesture);
 
     return () => {
       cancelled = true;
       window.removeEventListener("pointerdown", onGesture);
       window.removeEventListener("keydown", onGesture);
       window.removeEventListener("mousemove", onGesture);
+      window.removeEventListener("touchstart", onGesture);
     };
   }, [autoStart, active]);
 
@@ -148,19 +146,16 @@ export default function HumToggle({ active, autoStart = false }) {
   }, []);
 
   const toggle = async () => {
-    if (!on) {
-      const ok = await startAudio();
-      if (ok) {
-        setOn(true);
-        setPendingGesture(false);
-      }
-    } else {
-      await stopAudio();
+    if (on) {
+      userMutedRef.current = true;
       setOn(false);
+      await stopAudio();
+    } else {
+      userMutedRef.current = false;
+      setOn(true);
+      await startAudio();
     }
   };
-
-  const label = on ? "HUM // ON" : pendingGesture ? "HUM // TAP TO ENABLE" : "HUM // OFF";
 
   return (
     <button
@@ -174,7 +169,7 @@ export default function HumToggle({ active, autoStart = false }) {
       <span className="mirak-hum-icon" aria-hidden="true">
         {on ? <Volume2 size={13} strokeWidth={1.4} /> : <VolumeX size={13} strokeWidth={1.4} />}
       </span>
-      <span className="mirak-hum-label">{label}</span>
+      <span className="mirak-hum-label">{on ? "HUM // ON" : "HUM // OFF"}</span>
       <span className={`mirak-hum-led ${on ? "is-on" : ""}`} aria-hidden="true" />
     </button>
   );
