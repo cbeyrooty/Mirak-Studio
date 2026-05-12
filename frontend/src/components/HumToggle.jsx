@@ -2,43 +2,49 @@ import { useEffect, useRef, useState } from "react";
 import { Volume2, VolumeX } from "lucide-react";
 
 /**
- * Optional cinematic hum / projector noise — WebAudio synthesized so we
- * don't need an external asset. Muted by default per spec.
+ * Cinematic hum — auto-starts (with a graceful fallback if the browser
+ * blocks autoplay until the first user gesture). User can mute at any time.
  */
-export default function HumToggle({ active }) {
+export default function HumToggle({ active, autoStart = false }) {
   const [on, setOn] = useState(false);
+  const [pendingGesture, setPendingGesture] = useState(false);
   const ctxRef = useRef(null);
   const nodesRef = useRef(null);
-
-  useEffect(() => {
-    return () => {
-      try {
-        if (ctxRef.current) ctxRef.current.close();
-      } catch {}
-    };
-  }, []);
+  const startedRef = useRef(false);
 
   const startAudio = async () => {
+    if (startedRef.current) return true;
     const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
+    if (!AC) return false;
     const ctx = new AC();
+
+    if (ctx.state === "suspended") {
+      try {
+        await ctx.resume();
+      } catch {
+        // resume failed — likely needs user gesture
+      }
+    }
+    if (ctx.state !== "running") {
+      // Browser blocked autoplay
+      try { ctx.close(); } catch {}
+      return false;
+    }
+
     ctxRef.current = ctx;
 
-    // Low rumble oscillator
     const rumble = ctx.createOscillator();
     rumble.type = "sine";
     rumble.frequency.value = 52;
     const rumbleGain = ctx.createGain();
     rumbleGain.gain.value = 0;
 
-    // Sub harmonic
     const sub = ctx.createOscillator();
     sub.type = "triangle";
     sub.frequency.value = 78;
     const subGain = ctx.createGain();
     subGain.gain.value = 0;
 
-    // Projector hiss — pink-ish noise via filtered white
     const bufferSize = 2 * ctx.sampleRate;
     const noiseBuf = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = noiseBuf.getChannelData(0);
@@ -53,7 +59,6 @@ export default function HumToggle({ active }) {
     const hissGain = ctx.createGain();
     hissGain.gain.value = 0;
 
-    // Master
     const master = ctx.createGain();
     master.gain.value = 0.55;
 
@@ -66,18 +71,22 @@ export default function HumToggle({ active }) {
     sub.start();
     noise.start();
 
-    // Slow fade-in
     const now = ctx.currentTime;
-    rumbleGain.gain.linearRampToValueAtTime(0.18, now + 1.4);
-    subGain.gain.linearRampToValueAtTime(0.09, now + 1.6);
-    hissGain.gain.linearRampToValueAtTime(0.035, now + 1.8);
+    rumbleGain.gain.linearRampToValueAtTime(0.18, now + 1.8);
+    subGain.gain.linearRampToValueAtTime(0.09, now + 2.0);
+    hissGain.gain.linearRampToValueAtTime(0.035, now + 2.2);
 
     nodesRef.current = { rumble, sub, noise, rumbleGain, subGain, hissGain, master };
+    startedRef.current = true;
+    return true;
   };
 
   const stopAudio = async () => {
     const ctx = ctxRef.current;
-    if (!ctx || !nodesRef.current) return;
+    if (!ctx || !nodesRef.current) {
+      startedRef.current = false;
+      return;
+    }
     const { rumbleGain, subGain, hissGain, master, rumble, sub, noise } = nodesRef.current;
     const now = ctx.currentTime;
     rumbleGain.gain.linearRampToValueAtTime(0, now + 0.4);
@@ -85,26 +94,73 @@ export default function HumToggle({ active }) {
     hissGain.gain.linearRampToValueAtTime(0, now + 0.4);
     setTimeout(async () => {
       try {
-        rumble.stop();
-        sub.stop();
-        noise.stop();
+        rumble.stop(); sub.stop(); noise.stop();
         master.disconnect();
         await ctx.close();
       } catch {}
       ctxRef.current = null;
       nodesRef.current = null;
+      startedRef.current = false;
     }, 500);
   };
 
+  // Auto-start when active. If blocked, wait for the first user gesture.
+  useEffect(() => {
+    if (!autoStart || !active || startedRef.current) return;
+    let cancelled = false;
+
+    (async () => {
+      const ok = await startAudio();
+      if (cancelled) return;
+      if (ok) setOn(true);
+      else setPendingGesture(true);
+    })();
+
+    const onGesture = async () => {
+      if (cancelled || startedRef.current) return;
+      const ok = await startAudio();
+      if (ok) {
+        setOn(true);
+        setPendingGesture(false);
+        window.removeEventListener("pointerdown", onGesture);
+        window.removeEventListener("keydown", onGesture);
+        window.removeEventListener("mousemove", onGesture);
+      }
+    };
+    window.addEventListener("pointerdown", onGesture);
+    window.addEventListener("keydown", onGesture);
+    window.addEventListener("mousemove", onGesture);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("pointerdown", onGesture);
+      window.removeEventListener("keydown", onGesture);
+      window.removeEventListener("mousemove", onGesture);
+    };
+  }, [autoStart, active]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        if (ctxRef.current) ctxRef.current.close();
+      } catch {}
+    };
+  }, []);
+
   const toggle = async () => {
     if (!on) {
-      await startAudio();
-      setOn(true);
+      const ok = await startAudio();
+      if (ok) {
+        setOn(true);
+        setPendingGesture(false);
+      }
     } else {
       await stopAudio();
       setOn(false);
     }
   };
+
+  const label = on ? "HUM // ON" : pendingGesture ? "HUM // TAP TO ENABLE" : "HUM // OFF";
 
   return (
     <button
@@ -118,7 +174,7 @@ export default function HumToggle({ active }) {
       <span className="mirak-hum-icon" aria-hidden="true">
         {on ? <Volume2 size={13} strokeWidth={1.4} /> : <VolumeX size={13} strokeWidth={1.4} />}
       </span>
-      <span className="mirak-hum-label">{on ? "HUM // ON" : "HUM // OFF"}</span>
+      <span className="mirak-hum-label">{label}</span>
       <span className={`mirak-hum-led ${on ? "is-on" : ""}`} aria-hidden="true" />
     </button>
   );
