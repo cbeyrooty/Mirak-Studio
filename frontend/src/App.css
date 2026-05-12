@@ -12,7 +12,10 @@
   --mirak-bone: #e6dfcf;
   --mirak-amber: #d9b079;
   --mirak-silver: #b8b0a0;
-  --mirak-spotlight-radius: 320px;
+  /* Responsive spotlight: scales with viewport size */
+  --mirak-spotlight-radius: clamp(180px, 28vmin, 360px);
+  /* Letterbox bar size scales with viewport height */
+  --mirak-letterbox-h: clamp(18px, 4.4vh, 42px);
 }
 
 * { box-sizing: border-box; }
@@ -25,6 +28,10 @@ html, body, #root {
   background: #000;
   color: var(--mirak-bone);
   overflow: hidden;
+  /* Prevent iOS rubber-band & overscroll glow */
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Hide platform-injected badge for splash placeholder */
@@ -41,9 +48,17 @@ body {
   inset: 0;
   width: 100vw;
   height: 100vh;
+  /* Use small/dynamic viewport units where available — fixes iOS URL bar issues */
+  height: 100svh;
+  height: 100dvh;
   overflow: hidden;
   background: var(--mirak-black);
   cursor: crosshair;
+}
+
+/* Touch devices: don't show the crosshair (it serves no purpose) */
+@media (hover: none) and (pointer: coarse) {
+  .mirak-root { cursor: default; }
 }
 
 /* =================================================================
@@ -199,9 +214,19 @@ body {
 
 .mirak-logo-breathe {
   position: relative;
-  width: min(58vmin, 720px);
+  /* Scale fluidly with the smaller viewport dimension; cap at 720px.
+     Also constrain by height to avoid overflow on short/wide viewports. */
+  width: clamp(220px, 56vmin, 720px);
+  max-height: 70vh;
   aspect-ratio: 1 / 1;
   animation: mirakBreathe 6.4s ease-in-out infinite;
+}
+
+/* When the container is height-constrained, keep aspect-ratio by also limiting width */
+@supports (aspect-ratio: 1) {
+  .mirak-logo-breathe {
+    /* aspect-ratio handles it */
+  }
 }
 
 @keyframes mirakBreathe {
@@ -283,13 +308,16 @@ body {
 .mirak-subheader {
   display: flex;
   align-items: center;
-  gap: 18px;
-  max-width: min(720px, 86vw);
-  margin-top: -38px;
+  gap: clamp(8px, 1.6vw, 22px);
+  width: 100%;
+  max-width: min(820px, 90vw);
+  margin-top: clamp(-44px, -3vw, -18px);
+  padding: 0 clamp(12px, 4vw, 32px);
   font-family: "Cormorant Garamond", "Times New Roman", serif;
   font-weight: 400;
   font-style: italic;
-  font-size: clamp(14px, 1.6vw, 20px);
+  font-size: clamp(13px, 1.55vw, 21px);
+  line-height: 1.25;
   letter-spacing: 0.04em;
   color: rgba(230, 223, 207, 0.78);
   text-align: center;
@@ -299,6 +327,7 @@ body {
 .mirak-subheader-text {
   white-space: nowrap;
   text-shadow: 0 0 22px rgba(217, 176, 121, 0.18);
+  flex-shrink: 0;
 }
 
 .mirak-subheader-rule {
@@ -320,11 +349,21 @@ body {
 
 @media (max-width: 640px) {
   .mirak-subheader {
-    margin-top: -18px;
-    gap: 10px;
-    font-size: 12px;
+    margin-top: clamp(-20px, -2vw, -8px);
+    gap: 8px;
+    font-size: clamp(11px, 3.4vw, 14px);
   }
   .mirak-subheader-text { white-space: normal; }
+  .mirak-subheader-rule { min-width: 16px; }
+}
+
+/* Very narrow / portrait phones — let the subheader breathe on two lines */
+@media (max-width: 380px) {
+  .mirak-subheader {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .mirak-subheader-rule { width: 60%; height: 1px; }
 }
 
 /* === FILM GRAIN === */
@@ -366,7 +405,7 @@ body {
   position: absolute;
   left: 0;
   right: 0;
-  height: 38px;
+  height: var(--mirak-letterbox-h);
   background: #000;
   pointer-events: none;
   box-shadow: inset 0 0 18px rgba(0, 0, 0, 1);
@@ -377,19 +416,23 @@ body {
 /* === FOOTER MARK === */
 .mirak-footer-mark {
   position: absolute;
-  bottom: 14px;
+  bottom: clamp(8px, 1.6vh, 18px);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(8px, 1.4vw, 16px);
+  max-width: 92vw;
   font-family: "JetBrains Mono", monospace;
-  font-size: 10px;
+  font-size: clamp(8px, 0.85vw, 11px);
   letter-spacing: 0.32em;
   color: rgba(230, 223, 207, 0.42);
   text-transform: uppercase;
   pointer-events: none;
   z-index: 10;
+  white-space: nowrap;
   animation: mirakFadeIn 1600ms 700ms both cubic-bezier(0.65, 0, 0.2, 1);
 }
 
@@ -420,15 +463,16 @@ body {
 /* === HUM TOGGLE === */
 .mirak-hum-toggle {
   position: absolute;
-  bottom: 56px;
-  left: 28px;
+  bottom: clamp(48px, 7.5vh, 64px);
+  left: clamp(14px, 2.2vw, 32px);
   z-index: 12;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px 8px 12px;
+  gap: clamp(8px, 1vw, 12px);
+  padding: clamp(10px, 1.2vh, 12px) clamp(14px, 1.4vw, 18px);
+  min-height: 40px;            /* accessible tap target */
   font-family: "JetBrains Mono", monospace;
-  font-size: 10px;
+  font-size: clamp(9px, 0.78vw, 11px);
   letter-spacing: 0.28em;
   text-transform: uppercase;
   color: rgba(230, 223, 207, 0.55);
@@ -438,6 +482,9 @@ body {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   cursor: pointer;
+  touch-action: manipulation;   /* removes iOS 300ms tap delay */
+  user-select: none;
+  -webkit-user-select: none;
   opacity: 0;
   transform: translateY(8px);
   transition: opacity 700ms cubic-bezier(0.65, 0, 0.2, 1),
@@ -445,6 +492,16 @@ body {
               color 250ms ease,
               border-color 250ms ease,
               background 250ms ease;
+}
+
+.mirak-hum-toggle:focus-visible {
+  outline: none;
+  border-color: rgba(217, 176, 121, 0.8);
+  box-shadow: 0 0 0 2px rgba(217, 176, 121, 0.25);
+}
+
+.mirak-hum-toggle:active {
+  transform: translateY(0) scale(0.97);
 }
 
 .mirak-hum-toggle.is-active {
@@ -497,25 +554,68 @@ body {
 
 /* === RESPONSIVE === */
 @media (max-width: 640px) {
-  :root {
-    --mirak-spotlight-radius: 240px;
-  }
   .mirak-logo-breathe {
-    width: 78vw;
+    width: clamp(220px, 74vw, 480px);
   }
   .mirak-footer-mark {
     font-size: 9px;
-    gap: 10px;
-    letter-spacing: 0.24em;
-  }
-  .mirak-hum-toggle {
-    left: 14px;
-    bottom: 50px;
-    font-size: 9px;
+    gap: 8px;
     letter-spacing: 0.22em;
   }
-  .mirak-letterbox { height: 24px; }
+  .mirak-hum-toggle {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    gap: 8px;
+    padding: 10px 14px;
+  }
+}
+
+/* Ultra-wide screens — bump logo modestly; vmin already keeps it reasonable */
+@media (min-width: 1600px) and (min-aspect-ratio: 2/1) {
+  .mirak-logo-breathe {
+    width: clamp(380px, 44vmin, 820px);
+  }
+}
+
+/* Very short viewports (landscape phones) — shrink vertical elements */
+@media (max-height: 520px) {
+  .mirak-logo-breathe { width: clamp(180px, 36vmin, 360px); }
+  .mirak-subheader { margin-top: clamp(-16px, -2vw, -8px); }
+  .mirak-letterbox { height: clamp(14px, 3vh, 24px); }
+  .mirak-hum-toggle { bottom: clamp(36px, 9vh, 52px); }
+}
+
+/* Touch devices — bigger tap target, no hover style */
+@media (hover: none) and (pointer: coarse) {
+  .mirak-hum-toggle {
+    min-height: 44px;
+    padding: 12px 16px;
+    font-size: 10px;
+  }
+  .mirak-hum-toggle:hover {
+    /* avoid sticky hover state on touch */
+    color: rgba(230, 223, 207, 0.55);
+    background: rgba(15, 14, 18, 0.55);
+    border-color: rgba(230, 223, 207, 0.12);
+  }
+  .mirak-hum-toggle.is-on:hover {
+    color: var(--mirak-amber);
+    border-color: rgba(217, 176, 121, 0.55);
+  }
 }
 
 /* Disable global app default white background flash */
 .App { background: var(--mirak-black); }
+
+/* Reduced motion respect */
+@media (prefers-reduced-motion: reduce) {
+  .mirak-logo-breathe,
+  .mirak-logo-specular,
+  .mirak-grain,
+  .mirak-anamorphic,
+  .mirak-footer-dot,
+  .mirak-hum-led.is-on {
+    animation: none !important;
+  }
+  .mirak-main, .mirak-black-overlay { transition-duration: 200ms; }
+}

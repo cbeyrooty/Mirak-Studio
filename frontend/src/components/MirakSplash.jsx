@@ -31,16 +31,21 @@ export default function MirakSplash() {
   }, []);
 
   const handleMove = useCallback((e) => {
-    const x = e.touches ? e.touches[0].clientX : e.clientX;
-    const y = e.touches ? e.touches[0].clientY : e.clientY;
+    const point = e.touches && e.touches[0] ? e.touches[0] : e;
+    const x = point.clientX;
+    const y = point.clientY;
+    if (typeof x !== "number" || typeof y !== "number") return;
     targetRef.current = { x, y };
   }, []);
 
   useEffect(() => {
-    const cx = window.innerWidth / 2;
-    const cy = window.innerHeight / 2;
-    cursorRef.current = { x: cx, y: cy };
-    targetRef.current = { x: cx, y: cy };
+    const recenter = () => {
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight / 2;
+      cursorRef.current = { x: cx, y: cy };
+      targetRef.current = { x: cx, y: cy };
+    };
+    recenter();
 
     const tick = () => {
       const c = cursorRef.current;
@@ -59,12 +64,32 @@ export default function MirakSplash() {
     };
     rafRef.current = requestAnimationFrame(tick);
 
+    // Keep spotlight inside the viewport when the window is resized/rotated
+    const onResize = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const t = targetRef.current;
+      const c = cursorRef.current;
+      if (t.x > w || t.y > h || t.x < 0 || t.y < 0) {
+        targetRef.current = { x: w / 2, y: h / 2 };
+      }
+      if (c.x > w || c.y > h || c.x < 0 || c.y < 0) {
+        cursorRef.current = { x: w / 2, y: h / 2 };
+      }
+    };
+
     window.addEventListener("mousemove", handleMove);
+    window.addEventListener("touchstart", handleMove, { passive: true });
     window.addEventListener("touchmove", handleMove, { passive: true });
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
     return () => {
       cancelAnimationFrame(rafRef.current);
       window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("touchstart", handleMove);
       window.removeEventListener("touchmove", handleMove);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
     };
   }, [handleMove]);
 

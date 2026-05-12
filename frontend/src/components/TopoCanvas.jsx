@@ -127,9 +127,11 @@ export default function TopoCanvas() {
       resizeTimer = setTimeout(render, 150);
     };
     window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
     return () => {
       clearTimeout(resizeTimer);
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
     };
   }, []);
 
