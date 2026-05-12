@@ -2,32 +2,26 @@ import { useEffect, useRef, useState } from "react";
 import { Volume2, VolumeX } from "lucide-react";
 
 /**
- * Cinematic hum — ON by default. User can mute. Browsers that block
- * autoplay will silently wait for the first user gesture to actually
- * start the audio, but the UI shows ON from the start (per intent).
+ * Cinematic hum — ON by default. UI shows ON immediately.
+ * Audio graph is built on mount; modern browsers block actual playback
+ * until the first user gesture, so we silently resume the AudioContext
+ * on the first interaction. Once the user toggles off, we stop and
+ * do NOT auto-resume.
  */
 export default function HumToggle({ active, autoStart = false }) {
-  // ON by default — represents the user's intent regardless of audio-context state
   const [on, setOn] = useState(autoStart);
   const ctxRef = useRef(null);
   const nodesRef = useRef(null);
-  const startedRef = useRef(false);
   const userMutedRef = useRef(false);
+  const builtRef = useRef(false);
 
-  const startAudio = async () => {
-    if (startedRef.current) return true;
+  // Build the entire audio graph — oscillators start, gains stay at 0
+  // until either (a) the context resumes and we ramp up, or (b) toggled off.
+  const buildGraph = () => {
+    if (builtRef.current) return;
     const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return false;
+    if (!AC) return;
     const ctx = new AC();
-
-    if (ctx.state === "suspended") {
-      try { await ctx.resume(); } catch {}
-    }
-    if (ctx.state !== "running") {
-      try { ctx.close(); } catch {}
-      return false;
-    }
-
     ctxRef.current = ctx;
 
     const rumble = ctx.createOscillator();
@@ -57,83 +51,100 @@ export default function HumToggle({ active, autoStart = false }) {
     hissGain.gain.value = 0;
 
     const master = ctx.createGain();
-    master.gain.value = 0.55;
+    master.gain.value = 0.6;
 
     rumble.connect(rumbleGain).connect(master);
     sub.connect(subGain).connect(master);
     noise.connect(hiss).connect(hissGain).connect(master);
     master.connect(ctx.destination);
 
-    rumble.start();
-    sub.start();
-    noise.start();
-
-    const now = ctx.currentTime;
-    rumbleGain.gain.linearRampToValueAtTime(0.18, now + 1.8);
-    subGain.gain.linearRampToValueAtTime(0.09, now + 2.0);
-    hissGain.gain.linearRampToValueAtTime(0.035, now + 2.2);
+    try {
+      rumble.start();
+      sub.start();
+      noise.start();
+    } catch {}
 
     nodesRef.current = { rumble, sub, noise, rumbleGain, subGain, hissGain, master };
-    startedRef.current = true;
-    return true;
+    builtRef.current = true;
   };
 
-  const stopAudio = async () => {
+  const fadeUp = () => {
     const ctx = ctxRef.current;
-    if (!ctx || !nodesRef.current) {
-      startedRef.current = false;
-      return;
-    }
-    const { rumbleGain, subGain, hissGain, master, rumble, sub, noise } = nodesRef.current;
+    const nodes = nodesRef.current;
+    if (!ctx || !nodes) return;
     const now = ctx.currentTime;
-    rumbleGain.gain.linearRampToValueAtTime(0, now + 0.4);
-    subGain.gain.linearRampToValueAtTime(0, now + 0.4);
-    hissGain.gain.linearRampToValueAtTime(0, now + 0.4);
-    setTimeout(async () => {
-      try {
-        rumble.stop(); sub.stop(); noise.stop();
-        master.disconnect();
-        await ctx.close();
-      } catch {}
-      ctxRef.current = null;
-      nodesRef.current = null;
-      startedRef.current = false;
-    }, 500);
+    nodes.rumbleGain.gain.cancelScheduledValues(now);
+    nodes.subGain.gain.cancelScheduledValues(now);
+    nodes.hissGain.gain.cancelScheduledValues(now);
+    nodes.rumbleGain.gain.setValueAtTime(nodes.rumbleGain.gain.value, now);
+    nodes.subGain.gain.setValueAtTime(nodes.subGain.gain.value, now);
+    nodes.hissGain.gain.setValueAtTime(nodes.hissGain.gain.value, now);
+    nodes.rumbleGain.gain.linearRampToValueAtTime(0.20, now + 2.0);
+    nodes.subGain.gain.linearRampToValueAtTime(0.10, now + 2.2);
+    nodes.hissGain.gain.linearRampToValueAtTime(0.040, now + 2.4);
   };
 
-  // When active, try to start audio. If autoplay blocked, attach gesture listeners
-  // that will start audio on the first interaction — unless the user has muted.
+  const fadeDown = () => {
+    const ctx = ctxRef.current;
+    const nodes = nodesRef.current;
+    if (!ctx || !nodes) return;
+    const now = ctx.currentTime;
+    nodes.rumbleGain.gain.cancelScheduledValues(now);
+    nodes.subGain.gain.cancelScheduledValues(now);
+    nodes.hissGain.gain.cancelScheduledValues(now);
+    nodes.rumbleGain.gain.setValueAtTime(nodes.rumbleGain.gain.value, now);
+    nodes.subGain.gain.setValueAtTime(nodes.subGain.gain.value, now);
+    nodes.hissGain.gain.setValueAtTime(nodes.hissGain.gain.value, now);
+    nodes.rumbleGain.gain.linearRampToValueAtTime(0, now + 0.5);
+    nodes.subGain.gain.linearRampToValueAtTime(0, now + 0.5);
+    nodes.hissGain.gain.linearRampToValueAtTime(0, now + 0.5);
+  };
+
+  // Mount: build the graph and try to resume. Attach gesture listeners
+  // so the very first interaction (click/keypress/touch/mousemove)
+  // unlocks the AudioContext.
   useEffect(() => {
     if (!autoStart || !active) return;
-    let cancelled = false;
+    buildGraph();
 
-    (async () => {
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+
+    // Eager attempt — works if browser allows (e.g. user has prior engagement)
+    ctx.resume()
+      .then(() => {
+        if (!userMutedRef.current && ctx.state === "running") fadeUp();
+      })
+      .catch(() => {});
+
+    const tryResume = () => {
       if (userMutedRef.current) return;
-      await startAudio();
-    })();
-
-    const onGesture = async () => {
-      if (cancelled || startedRef.current || userMutedRef.current) return;
-      await startAudio();
-      // Listeners self-clean once audio is running
-      if (startedRef.current) {
-        window.removeEventListener("pointerdown", onGesture);
-        window.removeEventListener("keydown", onGesture);
-        window.removeEventListener("mousemove", onGesture);
-        window.removeEventListener("touchstart", onGesture);
+      if (!ctxRef.current) return;
+      if (ctxRef.current.state === "running") {
+        fadeUp();
+        cleanup();
+        return;
       }
+      ctxRef.current
+        .resume()
+        .then(() => {
+          if (userMutedRef.current) return;
+          if (ctxRef.current && ctxRef.current.state === "running") {
+            fadeUp();
+            cleanup();
+          }
+        })
+        .catch(() => {});
     };
-    window.addEventListener("pointerdown", onGesture);
-    window.addEventListener("keydown", onGesture);
-    window.addEventListener("mousemove", onGesture);
-    window.addEventListener("touchstart", onGesture);
+
+    const events = ["pointerdown", "click", "keydown", "touchstart", "mousemove"];
+    const cleanup = () => {
+      events.forEach((ev) => window.removeEventListener(ev, tryResume));
+    };
+    events.forEach((ev) => window.addEventListener(ev, tryResume, { passive: true }));
 
     return () => {
-      cancelled = true;
-      window.removeEventListener("pointerdown", onGesture);
-      window.removeEventListener("keydown", onGesture);
-      window.removeEventListener("mousemove", onGesture);
-      window.removeEventListener("touchstart", onGesture);
+      cleanup();
     };
   }, [autoStart, active]);
 
@@ -142,6 +153,9 @@ export default function HumToggle({ active, autoStart = false }) {
       try {
         if (ctxRef.current) ctxRef.current.close();
       } catch {}
+      ctxRef.current = null;
+      nodesRef.current = null;
+      builtRef.current = false;
     };
   }, []);
 
@@ -149,11 +163,16 @@ export default function HumToggle({ active, autoStart = false }) {
     if (on) {
       userMutedRef.current = true;
       setOn(false);
-      await stopAudio();
+      fadeDown();
     } else {
       userMutedRef.current = false;
       setOn(true);
-      await startAudio();
+      buildGraph();
+      const ctx = ctxRef.current;
+      if (ctx) {
+        try { await ctx.resume(); } catch {}
+        fadeUp();
+      }
     }
   };
 
