@@ -14,17 +14,7 @@ export default function MirakSplash() {
 
   useEffect(() => {
     const t = setTimeout(() => setPhase("main"), BLACK_HOLD);
-    const removeBadge = () => {
-      const el = document.getElementById("emergent-badge");
-      if (el) el.remove();
-    };
-    removeBadge();
-    const badgeInterval = setInterval(removeBadge, 500);
-    setTimeout(() => clearInterval(badgeInterval), 6000);
-    return () => {
-      clearTimeout(t);
-      clearInterval(badgeInterval);
-    };
+    return () => clearTimeout(t);
   }, []);
 
   const handleMove = useCallback((e) => {

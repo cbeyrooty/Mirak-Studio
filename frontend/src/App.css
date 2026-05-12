@@ -34,9 +34,6 @@ html, body, #root {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Hide platform-injected badge for splash placeholder */
-#emergent-badge { display: none !important; }
-
 body {
   font-family: "JetBrains Mono", monospace;
   -webkit-font-smoothing: antialiased;
